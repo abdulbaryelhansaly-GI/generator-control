@@ -3,71 +3,45 @@
 namespace App\Http\Controllers;
 
 use App\Models\Generator;
-use App\Models\MaintenanceTicket;
+use Illuminate\Http\Response;
 
 class ExportController extends Controller
 {
-    // ── PDF — rendered in browser, user prints to PDF ─────────────
-    public function pdf()
+    /**
+     * Export generators as CSV.
+     */
+    public function csv(): Response
     {
-        $generators = Generator::with(['latestTelemetry', 'rulPrediction'])->get();
-        $tickets    = MaintenanceTicket::with('generator')
-            ->where('status', '!=', 'resolved')
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        return view('exports.report', compact('generators', 'tickets'));
+        $generators = Generator::all();
+        $csv = "ID,Name,Location,Model,Status\n";
+        foreach ($generators as $generator) {
+            $csv .= "{$generator->id},{$generator->name},{$generator->location},{$generator->model},{$generator->status}\n";
+        }
+        return response($csv, 200, [
+            'Content-Type' => 'text/csv; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="generators.csv"',
+        ]);
     }
 
-    // ── CSV download ──────────────────────────────────────────────
-    public function csv()
+    /**
+     * Export generators as PDF.
+     */
+    public function pdf(): Response
     {
-        $generators = Generator::with(['latestTelemetry', 'rulPrediction'])->get();
-
-        $headers = [
-            'Content-Type'        => 'text/csv',
-            'Content-Disposition' => 'attachment; filename="generator-report-' . now()->format('Y-m-d') . '.csv"',
-        ];
-
-        $callback = function () use ($generators) {
-            $handle = fopen('php://output', 'w');
-
-            fputcsv($handle, [
-                'Generator ID', 'Name', 'Location', 'Model',
-                'Latest RPM', 'Temperature (°C)', 'Vibration (mm/s)',
-                'Alert Status', 'Health (%)', 'RUL (days)',
-                'Predicted Failure Date', 'Limiting Sensor', 'Last Reading'
-            ]);
-
-            foreach ($generators as $gen) {
-                $t   = $gen->latestTelemetry;
-                $rul = $gen->rulPrediction;
-
-                if (!$t) $status = 'No Data';
-                elseif ($t->temperature >= 95 || $t->vibration >= 5.0) $status = 'Critical';
-                elseif ($t->temperature >= 85 || $t->vibration >= 3.5 || $t->rpm >= 1600) $status = 'Warning';
-                else $status = 'Optimal';
-
-                fputcsv($handle, [
-                    $gen->id,
-                    $gen->name,
-                    $gen->location,
-                    $gen->model,
-                    $t   ? number_format($t->rpm, 2)         : '—',
-                    $t   ? number_format($t->temperature, 2) : '—',
-                    $t   ? number_format($t->vibration, 2)   : '—',
-                    $status,
-                    $rul ? $rul->health_percent               : '—',
-                    $rul ? round($rul->rul_days, 1)           : '—',
-                    $rul ? $rul->predicted_fail_date          : '—',
-                    $rul ? $rul->limiting_sensor              : '—',
-                    $t   ? $t->recorded_at                   : '—',
-                ]);
-            }
-
-            fclose($handle);
-        };
-
-        return response()->stream($callback, 200, $headers);
+        $generators = Generator::all();
+        $pdf = "Generator Report\n";
+        $pdf .= "=" . str_repeat("=", 40) . "\n\n";
+        foreach ($generators as $generator) {
+            $pdf .= "ID: {$generator->id}\n";
+            $pdf .= "Name: {$generator->name}\n";
+            $pdf .= "Location: {$generator->location}\n";
+            $pdf .= "Model: {$generator->model}\n";
+            $pdf .= "Status: {$generator->status}\n";
+            $pdf .= "-" . str_repeat("-", 40) . "\n\n";
+        }
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="report.pdf"',
+        ]);
     }
 }

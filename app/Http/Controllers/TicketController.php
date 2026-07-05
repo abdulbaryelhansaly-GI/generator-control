@@ -3,66 +3,36 @@
 namespace App\Http\Controllers;
 
 use App\Models\MaintenanceTicket;
-use Illuminate\Http\Request;
-use App\Models\Generator;
-use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
+use Illuminate\Http\RedirectResponse;
 
 class TicketController extends Controller
 {
-    // List all open tickets
-    public function index()
+    /**
+     * Display all maintenance tickets.
+     */
+    public function index(): View
     {
-        $tickets = MaintenanceTicket::with('generator')
-            ->where('status', '!=', 'resolved')
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        return view('tickets', compact('tickets'));
+        $tickets = MaintenanceTicket::all();
+        return view('tickets.index', ['tickets' => $tickets]);
     }
 
-    // Mark a ticket as resolved
-    public function resolve($id)
+    /**
+     * Resolve a maintenance ticket.
+     */
+    public function resolve(int $id): RedirectResponse
     {
         $ticket = MaintenanceTicket::findOrFail($id);
-        $ticket->update([
-            'status'      => 'resolved',
-            'resolved_at' => now(),
-        ]);
-
-        return redirect()->back()->with('success', 'Ticket resolved.');
-    }
-    // Maintenance history with filters
-public function history(Request $request)
-{
-    $query = MaintenanceTicket::with('generator');
-
-    // Filter by generator
-    if ($request->filled('generator_id')) {
-        $query->where('generator_id', $request->generator_id);
+        $ticket->update(['status' => 'resolved']);
+        return redirect()->route('tickets.index');
     }
 
-    // Filter by severity
-    if ($request->filled('severity')) {
-        $query->where('severity', $request->severity);
+    /**
+     * Display ticket history.
+     */
+    public function history(): View
+    {
+        $tickets = MaintenanceTicket::orderBy('created_at', 'desc')->get();
+        return view('tickets.history', ['tickets' => $tickets]);
     }
-
-    // Filter by status
-    if ($request->filled('status')) {
-        $query->where('status', $request->status);
-    }
-
-    // Filter by date range
-    if ($request->filled('date_from')) {
-        $query->whereDate('created_at', '>=', $request->date_from);
-    }
-
-    if ($request->filled('date_to')) {
-        $query->whereDate('created_at', '<=', $request->date_to);
-    }
-
-    $tickets    = $query->orderBy('created_at', 'desc')->paginate(20)->withQueryString();
-    $generators = Generator::orderBy('name')->get();
-
-    return view('history', compact('tickets', 'generators'));
-}
 }
