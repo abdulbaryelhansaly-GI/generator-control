@@ -35,19 +35,19 @@ jobs:
           extensions: mbstring, pdo, pdo_mysql, mysql
           coverage: none
 
-      - name: Copy .env
-        run: cp .env.example .env.ci
-
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress --no-suggest
+        run: composer install --prefer-dist --no-progress
+
+      - name: Copy .env
+        run: cp .env.ci .env
 
       - name: Generate app key
-        run: php artisan key:generate --env=ci
-      - name: Debug files
+        run: php artisan key:generate
+
+      - name: Set storage permissions
         run: |
-          pwd
-          ls -la
-          ls -la database/ 
+          chmod -R 777 storage bootstrap/cache
+
       - name: Import database schema
         run: |
           mysql -uroot -proot -h 127.0.0.1 -P 3306 generator_monitoring_test < database/schema.sql
@@ -55,7 +55,6 @@ jobs:
       - name: Run tests
         env:
           APP_ENV: testing
-          APP_KEY: ${{ secrets.APP_KEY }}
           DB_CONNECTION: mysql
           DB_HOST: 127.0.0.1
           DB_PORT: 3306
