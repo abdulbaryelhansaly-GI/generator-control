@@ -9,6 +9,7 @@ use App\Models\MaintenanceTicket;
 use App\Models\User;
 use App\Console\Commands\CheckGeneratorAlerts;
 use Illuminate\Console\Command;
+use PHPUnit\Framework\Attributes\Test;
 
 class GeneratorSystemTest extends TestCase
 {
