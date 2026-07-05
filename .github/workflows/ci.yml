@@ -43,7 +43,11 @@ jobs:
 
       - name: Generate app key
         run: php artisan key:generate --env=ci
-
+      - name: Debug files
+        run: |
+          pwd
+          ls -la
+          ls -la database/ 
       - name: Import database schema
         run: |
           mysql -uroot -proot -h 127.0.0.1 -P 3306 generator_monitoring_test < database/schema.sql
