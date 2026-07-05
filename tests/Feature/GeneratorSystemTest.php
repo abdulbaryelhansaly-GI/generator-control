@@ -52,21 +52,21 @@ class GeneratorSystemTest extends TestCase
 
     // ── Auth tests ────────────────────────────────────────────────
 
-    /** @test */
+    #[Test]
     public function unauthenticated_user_is_redirected_to_login()
     {
         $response = $this->get('/');
         $response->assertRedirect('/login');
     }
 
-    /** @test */
+    #[Test]
     public function login_page_loads_successfully()
     {
         $response = $this->get('/login');
         $response->assertStatus(200);
     }
 
-    /** @test */
+    #[Test]
     public function authenticated_user_can_access_dashboard()
     {
         $user = User::where('email', 'test@factory.com')->first();
@@ -74,7 +74,7 @@ class GeneratorSystemTest extends TestCase
         $response->assertStatus(200);
     }
 
-    /** @test */
+    #[Test]
     public function invalid_credentials_are_rejected()
     {
         $response = $this->post('/login', [
@@ -86,7 +86,7 @@ class GeneratorSystemTest extends TestCase
 
     // ── Dashboard tests ───────────────────────────────────────────
 
-    /** @test */
+    #[Test]
     public function dashboard_displays_all_generators()
     {
         $user = User::where('email', 'test@factory.com')->first();
@@ -99,7 +99,7 @@ class GeneratorSystemTest extends TestCase
 
     // ── API tests ─────────────────────────────────────────────────
 
-    /** @test */
+    #[Test]
     public function api_returns_all_generators()
     {
         $response = $this->getJson('/api/generators');
@@ -113,7 +113,7 @@ class GeneratorSystemTest extends TestCase
         $response->assertJsonCount(3, 'data');
     }
 
-    /** @test */
+    #[Test]
     public function api_returns_single_generator()
     {
         $response = $this->getJson('/api/generators/1');
@@ -122,7 +122,7 @@ class GeneratorSystemTest extends TestCase
         $response->assertJsonPath('data.name', 'GEN-001');
     }
 
-    /** @test */
+    #[Test]
     public function api_returns_404_for_nonexistent_generator()
     {
         $response = $this->getJson('/api/generators/999');
@@ -130,7 +130,7 @@ class GeneratorSystemTest extends TestCase
         $response->assertJsonPath('status', 'error');
     }
 
-    /** @test */
+    #[Test]
     public function api_returns_telemetry_for_generator()
     {
         \DB::table('telemetry')->insert([
@@ -147,7 +147,7 @@ class GeneratorSystemTest extends TestCase
         $response->assertJsonPath('data.count', 1);
     }
 
-    /** @test */
+    #[Test]
     public function api_respects_limit_parameter()
     {
         for ($i = 0; $i < 10; $i++) {
@@ -167,111 +167,111 @@ class GeneratorSystemTest extends TestCase
 
     // ── Alert command tests ───────────────────────────────────────
 
-    /** @test */
-    /** @test */
-public function alert_command_creates_ticket_when_temperature_critical()
-{
-    \DB::table('telemetry')->insert([
-        'generator_id' => 1,
-        'rpm'          => 1500.00,
-        'temperature'  => 97.00,
-        'vibration'    => 2.00,
-        'recorded_at'  => now()->format('Y-m-d H:i:s'),
-    ]);
-
-    // Test the logic directly — create ticket when threshold breached
-    $generator = Generator::with('latestTelemetry')->find(1);
-    $reading   = $generator->latestTelemetry;
-
-    if ($reading->temperature >= 95.0) {
-        MaintenanceTicket::create([
-            'generator_id'            => 1,
-            'title'                   => "Critical temperature on {$generator->name}",
-            'description'             => "Temperature reached {$reading->temperature}°C",
-            'severity'                => 'critical',
-            'triggered_automatically' => true,
+    #[Test]
+    public function alert_command_creates_ticket_when_temperature_critical()
+    {
+        \DB::table('telemetry')->insert([
+            'generator_id' => 1,
+            'rpm'          => 1500.00,
+            'temperature'  => 97.00,
+            'vibration'    => 2.00,
+            'recorded_at'  => now()->format('Y-m-d H:i:s'),
         ]);
-    }
 
-    $this->assertDatabaseHas('maintenance_tickets', [
-        'generator_id'            => 1,
-        'severity'                => 'critical',
-        'triggered_automatically' => 1,
-        'status'                  => 'open',
-    ]);
-}
+        // Test the logic directly — create ticket when threshold breached
+        $generator = Generator::with('latestTelemetry')->find(1);
+        $reading   = $generator->latestTelemetry;
 
-/** @test */
-public function alert_command_does_not_duplicate_open_tickets()
-{
-    \DB::table('telemetry')->insert([
-        'generator_id' => 1,
-        'rpm'          => 1500.00,
-        'temperature'  => 97.00,
-        'vibration'    => 2.00,
-        'recorded_at'  => now()->format('Y-m-d H:i:s'),
-    ]);
-
-    $generator = Generator::with('latestTelemetry')->find(1);
-    $reading   = $generator->latestTelemetry;
-    $title     = "Critical temperature on {$generator->name}";
-
-    // Simulate running twice
-    for ($i = 0; $i < 2; $i++) {
-        $exists = MaintenanceTicket::where('generator_id', 1)
-            ->where('title', $title)
-            ->where('status', '!=', 'resolved')
-            ->exists();
-
-        if (!$exists && $reading->temperature >= 95.0) {
+        if ($reading->temperature >= 95.0) {
             MaintenanceTicket::create([
                 'generator_id'            => 1,
-                'title'                   => $title,
+                'title'                   => "Critical temperature on {$generator->name}",
                 'description'             => "Temperature reached {$reading->temperature}°C",
                 'severity'                => 'critical',
                 'triggered_automatically' => true,
             ]);
         }
-    }
 
-    $count = MaintenanceTicket::where('generator_id', 1)
-        ->where('title', $title)
-        ->count();
-
-    $this->assertEquals(1, $count);
-}
-
-/** @test */
-public function alert_command_creates_no_ticket_for_normal_readings()
-{
-    \DB::table('telemetry')->insert([
-        'generator_id' => 1,
-        'rpm'          => 1500.00,
-        'temperature'  => 75.00,
-        'vibration'    => 2.00,
-        'recorded_at'  => now()->format('Y-m-d H:i:s'),
-    ]);
-
-    $generator = Generator::with('latestTelemetry')->find(1);
-    $reading   = $generator->latestTelemetry;
-
-    // Should not create ticket for normal reading
-    if ($reading->temperature >= 95.0 || $reading->vibration >= 5.0) {
-        MaintenanceTicket::create([
+        $this->assertDatabaseHas('maintenance_tickets', [
             'generator_id'            => 1,
-            'title'                   => 'Alert',
             'severity'                => 'critical',
-            'triggered_automatically' => true,
+            'triggered_automatically' => 1,
+            'status'                  => 'open',
         ]);
     }
 
-    $this->assertDatabaseMissing('maintenance_tickets', [
-        'generator_id' => 1,
-    ]);
-}
+    #[Test]
+    public function alert_command_does_not_duplicate_open_tickets()
+    {
+        \DB::table('telemetry')->insert([
+            'generator_id' => 1,
+            'rpm'          => 1500.00,
+            'temperature'  => 97.00,
+            'vibration'    => 2.00,
+            'recorded_at'  => now()->format('Y-m-d H:i:s'),
+        ]);
+
+        $generator = Generator::with('latestTelemetry')->find(1);
+        $reading   = $generator->latestTelemetry;
+        $title     = "Critical temperature on {$generator->name}";
+
+        // Simulate running twice
+        for ($i = 0; $i < 2; $i++) {
+            $exists = MaintenanceTicket::where('generator_id', 1)
+                ->where('title', $title)
+                ->where('status', '!=', 'resolved')
+                ->exists();
+
+            if (!$exists && $reading->temperature >= 95.0) {
+                MaintenanceTicket::create([
+                    'generator_id'            => 1,
+                    'title'                   => $title,
+                    'description'             => "Temperature reached {$reading->temperature}°C",
+                    'severity'                => 'critical',
+                    'triggered_automatically' => true,
+                ]);
+            }
+        }
+
+        $count = MaintenanceTicket::where('generator_id', 1)
+            ->where('title', $title)
+            ->count();
+
+        $this->assertEquals(1, $count);
+    }
+
+    #[Test]
+    public function alert_command_creates_no_ticket_for_normal_readings()
+    {
+        \DB::table('telemetry')->insert([
+            'generator_id' => 1,
+            'rpm'          => 1500.00,
+            'temperature'  => 75.00,
+            'vibration'    => 2.00,
+            'recorded_at'  => now()->format('Y-m-d H:i:s'),
+        ]);
+
+        $generator = Generator::with('latestTelemetry')->find(1);
+        $reading   = $generator->latestTelemetry;
+
+        // Should not create ticket for normal reading
+        if ($reading->temperature >= 95.0 || $reading->vibration >= 5.0) {
+            MaintenanceTicket::create([
+                'generator_id'            => 1,
+                'title'                   => 'Alert',
+                'severity'                => 'critical',
+                'triggered_automatically' => true,
+            ]);
+        }
+
+        $this->assertDatabaseMissing('maintenance_tickets', [
+            'generator_id' => 1,
+        ]);
+    }
+    
     // ── Ticket tests ──────────────────────────────────────────────
 
-    /** @test */
+    #[Test]
     public function authenticated_user_can_view_tickets_page()
     {
         $user = User::where('email', 'test@factory.com')->first();
@@ -279,7 +279,7 @@ public function alert_command_creates_no_ticket_for_normal_readings()
         $response->assertStatus(200);
     }
 
-    /** @test */
+    #[Test]
     public function ticket_can_be_resolved()
     {
         $user = User::where('email', 'test@factory.com')->first();
@@ -307,7 +307,7 @@ public function alert_command_creates_no_ticket_for_normal_readings()
 
     // ── Export tests ──────────────────────────────────────────────
 
-    /** @test */
+    #[Test]
     public function csv_export_downloads_successfully()
     {
         $user = User::where('email', 'test@factory.com')->first();
@@ -316,7 +316,7 @@ public function alert_command_creates_no_ticket_for_normal_readings()
         $response->assertHeader('Content-Type', 'text/csv; charset=utf-8');
     }
 
-    /** @test */
+    #[Test]
     public function pdf_report_loads_successfully()
     {
         $user = User::where('email', 'test@factory.com')->first();
